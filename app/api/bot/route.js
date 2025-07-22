@@ -1,13 +1,9 @@
+import { NextResponse } from "next/server";
 import WebSocket from "ws";
 
 let twitchSocket;
 
-export default function handler(req, res) {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", ["GET"]);
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
-  }
-
+export async function GET(request) {
   if (!twitchSocket) {
     const { TWITCH_OAUTH_TOKEN, TWITCH_BOT_USERNAME, TWITCH_CHANNEL } =
       process.env;
@@ -30,18 +26,23 @@ export default function handler(req, res) {
         return;
       }
 
-      const match = message.match(/^:([^!]+)!.* PRIVMSG #[^ ]+ :(.+)$/);
-      if (match) {
-        const user = match[1];
-        const text = match[2];
-        console.log(`💬 ${user}: ${text}`);
-
-        if (text === "!ping") {
-          const reply = `PRIVMSG ${TWITCH_CHANNEL} :@${user}, Pong! 🏓`;
-          twitchSocket.send(reply);
-          console.log("➡️", reply);
-        }
+      if (message.includes("Hallo Welt")) {
+        twitchSocket.send(`PRIVMSG ${TWITCH_CHANNEL} :Lösch dich`);
       }
+
+      //   const match = message.match(/^:([^!]+)!.* PRIVMSG #[^ ]+ :(.+)$/);
+      //   console.log("match", match);
+      //   if (match) {
+      //     const user = match[1];
+      //     const text = match[2];
+      //     console.log(`💬 ${user}: ${text}`);
+
+      //     if (text === "Hello World") {
+      //       const reply = `PRIVMSG ${TWITCH_CHANNEL} :@${user}, Pong! 🏓`;
+      //       twitchSocket.send(reply);
+      //       console.log("➡️", reply);
+      //     }
+      //   }
     });
 
     twitchSocket.on("error", (err) => {
@@ -54,7 +55,8 @@ export default function handler(req, res) {
     });
   }
 
-  res
-    .status(200)
-    .json({ success: true, message: "Twitch-Bot läuft im Hintergrund." });
+  return NextResponse.json({
+    success: true,
+    message: "Twitch-Bot läuft im Hintergrund.",
+  });
 }
