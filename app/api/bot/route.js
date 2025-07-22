@@ -1,59 +1,60 @@
-// Installiere zuerst: npm install ws
+import WebSocket from "ws";
 
-const WebSocket = require("ws");
+let twitchSocket;
 
-// Deine Zugangsdaten – ersetze die Platzhalter durch deine Werte
-const OAUTH_TOKEN = "oauth:dein_oauth_token"; // inkl. "oauth:"-Präfix
-const BOT_USERNAME = "dein_bot_username";
-const CHANNEL = "#dein_channel_name"; // z.B. '#meinkanal'
-
-// Twitch IRC WebSocket-URL
-const WS_URL = "wss://irc-ws.chat.twitch.tv:443";
-
-const ws = new WebSocket(WS_URL);
-
-ws.on("open", () => {
-  console.log("▶️ Verbunden mit Twitch IRC");
-
-  // 1) Authentifizieren
-  ws.send(`PASS ${OAUTH_TOKEN}`);
-  ws.send(`NICK ${BOT_USERNAME}`);
-
-  // 2) Channel beitreten
-  ws.send(`JOIN ${CHANNEL}`);
-});
-
-ws.on("message", (rawData) => {
-  const message = rawData.toString();
-  console.log("⬅️", message.trim());
-
-  // PING/PONG für Keep‑Alive
-  if (message.startsWith("PING")) {
-    ws.send("PONG :tmi.twitch.tv");
-    return;
+export default function handler(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", ["GET"]);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  // Beispiel: auf Chat‑Nachrichten reagieren
-  // IRC‑Format: :user!user@user.tmi.twitch.tv PRIVMSG #channel :Nachrichtentext
-  const match = message.match(/^:([^!]+)!.* PRIVMSG #[^ ]+ :(.+)$/);
-  if (match) {
-    const user = match[1];
-    const text = match[2];
-    console.log(`💬 ${user}: ${text}`);
+  if (!twitchSocket) {
+    const { TWITCH_OAUTH_TOKEN, TWITCH_BOT_USERNAME, TWITCH_CHANNEL } =
+      process.env;
 
-    // Beispiel-Antwort: wenn jemand "!ping" schreibt
-    if (text === "!ping") {
-      const reply = `PRIVMSG ${CHANNEL} :@${user}, Pong! 🏓`;
-      ws.send(reply);
-      console.log("➡️", reply);
-    }
+    twitchSocket = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+
+    twitchSocket.on("open", () => {
+      console.log("▶️ Verbunden mit Twitch IRC");
+      twitchSocket.send(`PASS ${TWITCH_OAUTH_TOKEN}`);
+      twitchSocket.send(`NICK ${TWITCH_BOT_USERNAME}`);
+      twitchSocket.send(`JOIN ${TWITCH_CHANNEL}`);
+    });
+
+    twitchSocket.on("message", (data) => {
+      const message = data.toString();
+      console.log("⬅️", message.trim());
+
+      if (message.startsWith("PING")) {
+        twitchSocket.send("PONG :tmi.twitch.tv");
+        return;
+      }
+
+      const match = message.match(/^:([^!]+)!.* PRIVMSG #[^ ]+ :(.+)$/);
+      if (match) {
+        const user = match[1];
+        const text = match[2];
+        console.log(`💬 ${user}: ${text}`);
+
+        if (text === "!ping") {
+          const reply = `PRIVMSG ${TWITCH_CHANNEL} :@${user}, Pong! 🏓`;
+          twitchSocket.send(reply);
+          console.log("➡️", reply);
+        }
+      }
+    });
+
+    twitchSocket.on("error", (err) => {
+      console.error("❌ WebSocket-Error:", err);
+    });
+
+    twitchSocket.on("close", (code, reason) => {
+      console.log(`🔴 Verbindung geschlossen: [${code}] ${reason}`);
+      twitchSocket = null;
+    });
   }
-});
 
-ws.on("error", (err) => {
-  console.error("❌ WebSocket-Error:", err);
-});
-
-ws.on("close", (code, reason) => {
-  console.log(`🔴 Verbindung geschlossen: [${code}] ${reason}`);
-});
+  res
+    .status(200)
+    .json({ success: true, message: "Twitch-Bot läuft im Hintergrund." });
+}
